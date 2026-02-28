@@ -24,20 +24,24 @@ def compute_wpm(transcript, duration_seconds):
 
 # PITCH VARIANCE
 def compute_pitch_variance(y, sr):
-    pitches, magnitude = librosa.piptrack(y=y, sr=sr)
+    f0, _, _ = librosa.pyin(
+        y,
+        fmin=75,    # lowest expected human pitch
+        fmax=350    # highest expected human pitch
+    )
 
-    pitch_values = []
+    # Remove unvoiced frames (NaN values)
+    pitch_values = f0[~np.isnan(f0)]
 
-    for i in range(pitches.shape[1]):
-        index = magnitude[:, i].argmax()
-        pitch = pitches[index, i]
-        if pitch > 0:
-            pitch_values.append(pitch)
-    
-    if len(pitch_values) == 0:
+    if len(pitch_values) < 10:
         return 0
-    
-    return np.var(pitch_values)
+
+    pitch_mean = np.mean(pitch_values)
+    pitch_std = np.std(pitch_values)
+
+    pitch_cv = pitch_std / (pitch_mean + 1e-6)
+
+    return round(float(pitch_cv), 4)
 
 # VOLUME VARIANCE
 def compute_volume_variance(y):
@@ -84,14 +88,14 @@ def analyze_audio(video_filename, transcript=""):
     duration = get_audio_duration(y, sr)
 
     wpm = compute_wpm(transcript, duration)
-    pitch_variance = compute_pitch_variance(y, sr)
+    pitch_cv = compute_pitch_variance(y, sr)
     volume_variance = compute_volume_variance(y)
     long_pause_ratio, avg_pause_duration = compute_pause_metrics(y, sr)
 
     return {
         "duration_seconds": duration,
         "words_per_minute": round(wpm, 2),
-        "pitch_variance": round(pitch_variance, 4),
+        "pitch_cv": round(pitch_cv, 4),
         "volume_variance": round(volume_variance, 4),
         "long_pause_ratio": round(long_pause_ratio, 4),
         "avg_pause_duration": round(avg_pause_duration, 3)
